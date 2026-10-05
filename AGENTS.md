@@ -71,6 +71,14 @@ Quarto activates the **closest** `Project.toml` when rendering a file:
 Run Julia from the relevant directory to activate the right env. The VS Code setting
 `julia.environmentPath` points to the repo root.
 
+**Every lab and homework environment includes `IJulia`.** Assignments ship to students as `.ipynb`
+notebooks, and IJulia provides the Julia kernel Jupyter needs to run them. Leaving it out has stopped
+students from doing the exercises — but only some students, on some setups, which is how the repos
+drifted: **it will usually work when you test it**, so a passing check is not evidence it can go. No
+cell ever loads it either, so it looks unused. Do not remove it when trimming an environment down to
+what an assignment uses, and check for it whenever you create a new year's branch. The
+same rule holds for BEE 4850.
+
 ## Structure
 
 - **`_quarto.yml`** — site config, nav, sidebar, format settings (HTML, Typst, RevealJS, Beamer)
@@ -110,8 +118,32 @@ Two consequences:
   title block falls back to the plain `title`. If a file must render both ways, vendor the filter
   alongside it.
 
+
+**The PDF students download may be built from the notebook, not from the `.qmd`.** An assignment's
+`.qmd` can specify Typst while its CI builds the PDF from the generated `.ipynb` through LaTeX. Then
+rendering the `.qmd` locally looks perfect and proves nothing about what students receive. Read the
+repo's workflow for which file and which target it invokes, and reproduce that command.
+
+**The notebook intermediate silently drops Quarto markup.** Callouts are flattened to blockquotes on
+the way into `.ipynb`, and `content-visible when-format=` is resolved for the notebook rather than the
+eventual PDF. Anything built downstream of the notebook therefore shows callouts as plain indented text
+and leaks notebook-only content, such as the name and ID fields, into the PDF. Neither failure raises an
+error, and both survive a source review. If the PDF has to carry callouts, build it from the `.qmd`.
+*(Moved here from the `assignment-authoring` skill on 2026-09-28, since it is specific to this course's
+Quarto → notebook → PDF pipeline.)*
+
 ## Known traps
 
+- **A code block must be the first thing on its slide — never put text above it.** Revealjs slides
+  are a fixed 1280×720 and do not scroll. Text above a code block pushes it down, and the code's own
+  scroll box is cut off by the slide's bottom edge, so readers cannot scroll to the end of the code.
+  Put the code first (right under the slide title); its output and any discussion can go below it,
+  or on the next slide. **Folded code counts** (`code-fold: true`): it expands in place, so text
+  above a folded cell breaks the rule too.
+- **Pre-allocate arrays in every code sample.** Students are taught to create an array at its final
+  size (`zeros(n)`, `Vector{Float64}(undef, n)`) and fill it by index, so slides, assignments, keys,
+  and tutorials must do the same: never start empty (`x = Float64[]`) and `push!` in a loop. The one
+  exception is code whose point is to show why appending is slow.
 - **Callout syntax.** Use `::: {.callout-note}` — hyphenated. The space-separated `::: {.callout .note}`
   is invalid, renders a callout titled literally "None" rather than failing, and currently appears in
   `~/Teaching/BEE4750/hw/solutions/hw02/hw02.qmd`.
@@ -146,6 +178,21 @@ Two consequences:
   ```
 
   `qlmanage -t` crops the same way and cannot be fixed by flags; use `rsvg-convert`.
+
+- **Unicode superscripts and subscripts in Plots.jl labels render as boxes** in Computer Modern
+  (`m³`, `x₁`, `R²`). Write the label as LaTeX (`"\$\\mathrm{m}^3\$"`, `"\$x_1\$"`) and check the
+  rendered figure. *(Found in BEE 4850's decks, 2026-10-03; same toolchain.)*
+- **Auto-stretch can shrink a figure that shares its slide with long folded code** to thumbnail size.
+  Put the figure in a column, mark the slide `{.nostretch}`, or set `auto-stretch: false` for the
+  deck and size figures explicitly; then screenshot the slide.
+- **Indented text after a figure renders as verbatim code.** In a quiz or assignment, a sub-part
+  indented under a numbered question becomes a code block once a figure chunk sits between them.
+  Write sub-parts after a figure unindented (`**(a)** …`) and look at the rendered PDF.
+- **A manifest resolved under one Julia version fails under another.** Quarto's Julia runner refuses
+  to run when a file's `exeflags` pins a different version from the one its `Manifest.toml` was
+  resolved with ("Julia version mismatch in notebook file"). Re-resolve with that version's
+  `Pkg.resolve()`; if a pinned build has since been removed from the registry, copy a freshly resolved
+  environment with the same packages.
 
 ## Known stale artifacts
 
